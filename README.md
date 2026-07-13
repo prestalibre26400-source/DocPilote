@@ -1,5 +1,7 @@
 # DocPilote
 
+![DocPilote](docs/banner.png)
+
 Un clic droit sur un document, et rien d'autre.
 
 DocPilote ajoute une action de menu contextuel dans votre gestionnaire de
