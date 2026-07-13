@@ -1,0 +1,46 @@
+#!/bin/bash
+set -e
+
+# Best-effort, jamais bloquant : ne doit jamais empêcher la suppression
+# (via dpkg, apt ou la logithèque/PackageKit) d'aboutir.
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+  if [ -n "${SUDO_USER:-}" ]; then
+    REAL_USER="$SUDO_USER"
+  else
+    REAL_USER="$(logname 2>/dev/null || echo "")"
+  fi
+
+  USER_ID=""
+  if [ -n "$REAL_USER" ]; then
+    USER_ID=$(id -u "$REAL_USER" 2>/dev/null || echo "")
+  fi
+
+  reload_bg() {
+    if [ -n "$REAL_USER" ] && [ -n "$USER_ID" ]; then
+      (timeout 5 sudo -u "$REAL_USER" DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$USER_ID/bus" "$@" >/dev/null 2>&1 &) || true
+    fi
+  }
+
+  if command -v nemo >/dev/null 2>&1; then
+    reload_bg nemo -q
+    reload_bg nemo-desktop --quit
+  fi
+
+  if command -v nautilus >/dev/null 2>&1; then
+    reload_bg nautilus -q
+  fi
+
+  if command -v dolphin >/dev/null 2>&1; then
+    if command -v kbuildsycoca6 >/dev/null 2>&1; then
+      reload_bg kbuildsycoca6
+    elif command -v kbuildsycoca5 >/dev/null 2>&1; then
+      reload_bg kbuildsycoca5
+    fi
+  fi
+
+  if command -v thunar >/dev/null 2>&1; then
+    reload_bg thunar -q
+  fi
+fi
+
+exit 0

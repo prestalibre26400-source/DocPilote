@@ -1,0 +1,64 @@
+[Desktop Entry]
+Type=Service
+Name=DocPilote
+X-KDE-ServiceTypes=KonqPopupMenu/Plugin
+MimeType=application/pdf;application/msword;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/vnd.ms-excel;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/vnd.ms-powerpoint;application/vnd.openxmlformats-officedocument.presentationml.presentation;application/vnd.oasis.opendocument.text;application/vnd.oasis.opendocument.spreadsheet;application/vnd.oasis.opendocument.presentation;text/plain;text/markdown;application/rtf;text/rtf;
+Actions=summarize;respond;explain;decide;risks;checklist;extract;ask;transform;compare;activate-license;
+X-KDE-Submenu=DocPilote
+X-KDE-Priority=TopLevel
+Icon=accessories-text-editor
+
+[Desktop Action summarize]
+Name=✦ Résumer
+Icon=accessories-text-editor
+Exec=/opt/docpilote/client/docpilote-run.sh summarize %F
+
+[Desktop Action respond]
+Name=✎ Préparer une réponse
+Icon=accessories-text-editor
+Exec=/opt/docpilote/client/docpilote-run.sh respond %F
+
+[Desktop Action explain]
+Name=❓ Explique-moi ce document
+Icon=accessories-text-editor
+Exec=/opt/docpilote/client/docpilote-run.sh explain %F
+
+[Desktop Action decide]
+Name=✓ Quelles actions dois-je entreprendre ?
+Icon=accessories-text-editor
+Exec=/opt/docpilote/client/docpilote-run.sh decide %F
+
+[Desktop Action risks]
+Name=⚠️ Détecter les risques
+Icon=accessories-text-editor
+Exec=/opt/docpilote/client/docpilote-run.sh risks %F
+
+[Desktop Action checklist]
+Name=☑ Créer une checklist
+Icon=accessories-text-editor
+Exec=/opt/docpilote/client/docpilote-run.sh checklist %F
+
+[Desktop Action extract]
+Name={ } Extraire (JSON)
+Icon=accessories-text-editor
+Exec=/opt/docpilote/client/docpilote-run.sh extract %F
+
+[Desktop Action ask]
+Name=? Interroger ce document
+Icon=accessories-text-editor
+Exec=/opt/docpilote/client/docpilote-run.sh ask %F
+
+[Desktop Action transform]
+Name=⇄ Transformer...
+Icon=accessories-text-editor
+Exec=/opt/docpilote/client/docpilote-run.sh transform %F
+
+[Desktop Action compare]
+Name=↔ Comparer ces 2 documents
+Icon=accessories-text-editor
+Exec=/opt/docpilote/client/docpilote-run.sh compare %F
+
+[Desktop Action activate-license]
+Name=🔑 Activer une licence
+Icon=accessories-text-editor
+Exec=/opt/docpilote/client/docpilote-run.sh activate-license

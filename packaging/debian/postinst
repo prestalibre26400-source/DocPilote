@@ -1,0 +1,160 @@
+#!/bin/bash
+set -e
+
+chmod +x /opt/docpilote/client/docpilote-run.sh
+chmod +x /opt/docpilote/client/docpilote_client.py
+
+# Rafraîchit la base des lanceurs .desktop pour que « DocPilote — Activer
+# une licence » apparaisse tout de suite dans le menu Applications, sans
+# jamais bloquer l'installation si l'outil est absent.
+if command -v update-desktop-database >/dev/null 2>&1; then
+  timeout 5 update-desktop-database -q /usr/share/applications >/dev/null 2>&1 || true
+fi
+
+# Détection de l'utilisateur "réel" (celui qui a lancé l'install via sudo,
+# ou l'utilisateur de la session graphique en cours).
+#
+# IMPORTANT : $SUDO_USER et `logname` ne sont fiables que pour une install
+# lancée depuis un terminal. Quand l'utilisateur installe via un gestionnaire
+# de paquets graphique (Logithèque / GNOME Software / gdebi / apt via une
+# UI polkit), le postinst tourne sans TTY et sans SUDO_USER : les deux
+# méthodes échouent silencieusement, Nemo/Nautilus/Thunar ne sont alors
+# jamais rechargés et le menu contextuel n'apparaît qu'après un redémarrage
+# manuel du gestionnaire de fichiers. On ajoute donc un fallback robuste via
+# loginctl, qui identifie l'utilisateur de la session graphique active,
+# indépendamment du contexte d'installation.
+if [ -n "${SUDO_USER:-}" ]; then
+  REAL_USER="$SUDO_USER"
+else
+  REAL_USER="$(logname 2>/dev/null || echo "")"
+fi
+
+if [ -z "$REAL_USER" ] && command -v loginctl >/dev/null 2>&1; then
+  # Cherche une session graphique active (seat0, Type x11/wayland, State active)
+  for session_id in $(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1}'); do
+    session_type=$(loginctl show-session "$session_id" -p Type --value 2>/dev/null || echo "")
+    session_state=$(loginctl show-session "$session_id" -p State --value 2>/dev/null || echo "")
+    case "$session_type" in
+      x11|wayland)
+        if [ "$session_state" = "active" ]; then
+          REAL_USER=$(loginctl show-session "$session_id" -p Name --value 2>/dev/null || echo "")
+          [ -n "$REAL_USER" ] && break
+        fi
+        ;;
+    esac
+  done
+fi
+
+# Dernier recours : première session graphique trouvée, active ou non.
+if [ -z "$REAL_USER" ] && command -v loginctl >/dev/null 2>&1; then
+  for session_id in $(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1}'); do
+    session_type=$(loginctl show-session "$session_id" -p Type --value 2>/dev/null || echo "")
+    case "$session_type" in
+      x11|wayland)
+        REAL_USER=$(loginctl show-session "$session_id" -p Name --value 2>/dev/null || echo "")
+        [ -n "$REAL_USER" ] && break
+        ;;
+    esac
+  done
+fi
+
+USER_ID=""
+if [ -n "$REAL_USER" ]; then
+  USER_ID=$(id -u "$REAL_USER" 2>/dev/null || echo "")
+fi
+
+# Récupère le vrai $DISPLAY de la session graphique de REAL_USER quand
+# possible (au lieu de supposer ":0", faux sur pas mal de configs multi-
+# session / Wayland avec Xwayland sur un display différent).
+REAL_DISPLAY=":0"
+if [ -n "$USER_ID" ] && command -v loginctl >/dev/null 2>&1; then
+  for session_id in $(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1}'); do
+    session_user=$(loginctl show-session "$session_id" -p Name --value 2>/dev/null || echo "")
+    if [ "$session_user" = "$REAL_USER" ]; then
+      sd=$(loginctl show-session "$session_id" -p Display --value 2>/dev/null || echo "")
+      if [ -n "$sd" ]; then
+        REAL_DISPLAY="$sd"
+        break
+      fi
+    fi
+  done
+fi
+
+# Toute recharge de gestionnaire de fichiers est best-effort et JAMAIS
+# bloquante : timeout court + exécution en arrière-plan, pour ne jamais faire
+# échouer/geler l'installation via dpkg/apt/la logithèque graphique.
+reload_bg() {
+  if [ -n "$REAL_USER" ] && [ -n "$USER_ID" ]; then
+    (timeout 5 sudo -u "$REAL_USER" DISPLAY="$REAL_DISPLAY" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$USER_ID/bus" "$@" >/dev/null 2>&1 &) || true
+  fi
+}
+
+DETECTED=""
+
+# --- Nemo (Linux Mint / Cinnamon) ---
+if command -v nemo >/dev/null 2>&1; then
+  DETECTED="$DETECTED nemo"
+  reload_bg nemo -q
+  # nemo-desktop (l'icône du bureau) est un process séparé de "nemo" et ne
+  # recharge pas ses extensions Python juste avec "nemo -q" — il faut le
+  # relancer explicitement lui aussi.
+  reload_bg nemo-desktop --quit
+fi
+
+# --- Nautilus (GNOME / Ubuntu / Fedora Workstation) ---
+if command -v nautilus >/dev/null 2>&1; then
+  DETECTED="$DETECTED nautilus"
+  reload_bg nautilus -q
+fi
+
+# --- Dolphin (KDE Plasma) ---
+if command -v dolphin >/dev/null 2>&1; then
+  DETECTED="$DETECTED dolphin"
+  # Les servicemenus KDE sont découverts via le cache "sycoca" ; il faut le
+  # reconstruire pour que le nouveau .desktop apparaisse sans redémarrage de
+  # session. kbuildsycoca6 (Plasma 6) sinon kbuildsycoca5 (Plasma 5, legacy).
+  if command -v kbuildsycoca6 >/dev/null 2>&1; then
+    reload_bg kbuildsycoca6
+  elif command -v kbuildsycoca5 >/dev/null 2>&1; then
+    reload_bg kbuildsycoca5
+  fi
+fi
+
+# --- Thunar (XFCE) ---
+THUNAR_MISSING_BINDING=0
+if command -v thunar >/dev/null 2>&1; then
+  DETECTED="$DETECTED thunar"
+  if dpkg -s thunarx-python >/dev/null 2>&1; then
+    # Comme Nemo/Nautilus, Thunar tourne en mode "daemon" résident et ne
+    # recharge pas ses extensions Python tant que ce daemon n'est pas
+    # relancé. "thunar -q" l'arrête proprement ; il redémarre tout seul au
+    # prochain accès (ouverture d'une fenêtre, etc.).
+    reload_bg thunar -q
+  else
+    # thunarx-python dépend du paquet "thunar" complet côté Debian/Ubuntu,
+    # donc il n'est volontairement PAS installé automatiquement ici (lancer
+    # apt-get depuis un postinst pendant qu'apt tient déjà son verrou
+    # échouerait de toute façon la plupart du temps). On informe seulement
+    # l'utilisateur à la fin de l'installation.
+    THUNAR_MISSING_BINDING=1
+  fi
+fi
+
+echo ""
+echo "DocPilote est installé (v0.13.4)."
+if [ -n "$DETECTED" ]; then
+  echo "Gestionnaire(s) de fichiers détecté(s) :$DETECTED"
+else
+  echo "Aucun gestionnaire de fichiers supporté détecté (Nemo/Nautilus/Dolphin/Thunar)."
+  echo "L'action DocPilote apparaîtra dès qu'un de ces gestionnaires sera installé."
+fi
+if [ "$THUNAR_MISSING_BINDING" = "1" ]; then
+  echo ""
+  echo "Thunar détecté mais le binding Python (thunarx-python) n'est pas installé."
+  echo "Pour activer DocPilote dans Thunar : sudo apt install thunarx-python"
+  echo "(puis relancer Thunar avec : thunar -q)"
+fi
+echo "Clic droit sur un document -> DocPilote -> survolez pour voir les actions"
+echo "(si le menu n'apparaît pas immédiatement, fermez/rouvrez votre gestionnaire de fichiers)"
+
+exit 0

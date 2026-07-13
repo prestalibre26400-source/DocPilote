@@ -1,0 +1,43 @@
+Package: docpilote
+Version: 0.13.4
+Section: utils
+Priority: optional
+Architecture: amd64
+Depends: python3, python3-gi, gir1.2-gtk-3.0, python3-requests, zenity, libnotify-bin
+Recommends: gir1.2-nemo-3.0, python3-nautilus
+Suggests: nemo, nautilus, dolphin, thunar, thunarx-python
+Maintainer: Observatoire Vivant <observatoire-vivant@prestalibre.org>
+Description: DocPilote — un clic droit, une capacité en plus
+ DocPilote ajoute une seule entrée "DocPilote" au menu contextuel de
+ votre gestionnaire de fichiers pour vos documents (PDF, Word
+ .doc/.docx, Excel .xls/.xlsx, PowerPoint .ppt/.pptx, OpenDocument
+ .odt/.ods/.odp, texte .txt/.md, RTF), avec un vrai sous-menu au
+ survol (comme « Ouvrir avec ») proposant 9 actions : Résumer,
+ Préparer une réponse, Explique-moi, Quelles actions dois-je
+ entreprendre, Détecter les risques, Créer une checklist, Extraire
+ (JSON), Interroger, Transformer. Sélectionnez 2 fichiers pour
+ Comparer.
+ .
+ Détection automatique du gestionnaire de fichiers installé —
+ fonctionne avec Nemo (Linux Mint/Cinnamon), Nautilus (GNOME/Ubuntu),
+ Dolphin (KDE Plasma) et Thunar (XFCE), sans configuration. Le
+ curseur système passe en mode "chargement" pendant l'analyse
+ (Nemo/Nautilus). Une notification desktop signale automatiquement
+ quand une nouvelle version est disponible (vérification passive,
+ 1 fois/12h max). Chaque action envoie le document au service
+ DocPilote hébergé (docpilote.prestalibre.org), propulsé par l'API
+ Mistral. Aucune clé API à configurer côté utilisateur.
+ .
+ Formule gratuite : 20 analyses/mois. Au-delà, un abonnement DocPilote
+ Pro (usage illimité) est proposable depuis docpilote.prestalibre.org.
+ Une entrée « DocPilote — Activer une licence » est ajoutée au menu
+ Applications pour saisir votre clé après abonnement.
+ .
+ Note technique : contrairement aux bindings Nemo/Nautilus (légers,
+ installés automatiquement via Recommends), le binding thunarx-python
+ dépend du paquet Thunar complet côté Debian/Ubuntu — il n'est donc
+ pas installé par défaut sur les systèmes qui n'ont pas déjà Thunar,
+ pour éviter d'installer un environnement de bureau non désiré. Si
+ Thunar est déjà présent sur votre machine, DocPilote active le
+ support automatiquement à l'installation (ou après
+ `sudo apt install thunarx-python` si besoin).

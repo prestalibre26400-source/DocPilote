@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+*.db
+*.db-journal
+.env
+.env.*
+!.env.example
+venv/
+*.egg-info/
+build/
+dist/
+*.deb
+*.exe
+.DS_Store
