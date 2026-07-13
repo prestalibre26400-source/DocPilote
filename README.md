@@ -88,4 +88,4 @@ renommer votre fork si vous le distribuez.
 ## Contact
 
 Une question sur le traitement des données ou sur le projet ?
-Écrivez à contact@prestalibre.org ou ouvrez une issue sur ce dépôt.
+Écrivez à prestalibre26400@gmail.com ou ouvrez une issue sur ce dépôt.
