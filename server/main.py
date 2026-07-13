@@ -103,6 +103,18 @@ def init_db():
             conn.execute("ALTER TABLE downloads ADD COLUMN country TEXT")
         except sqlite3.OperationalError:
             pass
+        # Geoloc ville (Cloudflare "Add visitor location headers") : ajoutee
+        # apres coup, migration best-effort colonne par colonne.
+        for ddl in (
+            "ALTER TABLE downloads ADD COLUMN city TEXT",
+            "ALTER TABLE downloads ADD COLUMN region TEXT",
+            "ALTER TABLE downloads ADD COLUMN latitude REAL",
+            "ALTER TABLE downloads ADD COLUMN longitude REAL",
+        ):
+            try:
+                conn.execute(ddl)
+            except sqlite3.OperationalError:
+                pass
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS usage_events (
@@ -167,15 +179,37 @@ def init_db():
 init_db()
 
 
-def log_download(version: str, ip: str, user_agent: str, country: str = "") -> None:
+def log_download(
+    version: str,
+    ip: str,
+    user_agent: str,
+    country: str = "",
+    city: str = "",
+    region: str = "",
+    latitude: str = "",
+    longitude: str = "",
+) -> None:
+    def _to_float(v: str):
+        try:
+            return float(v) if v else None
+        except ValueError:
+            return None
+
     with db_conn() as conn:
         conn.execute(
-            "INSERT INTO downloads (version, ip_hash, user_agent, country, created_at) VALUES (?, ?, ?, ?, ?)",
+            """
+            INSERT INTO downloads (version, ip_hash, user_agent, country, city, region, latitude, longitude, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
             (
                 version,
                 _hash_ip(ip),
                 (user_agent or "")[:200],
                 (country or "")[:2].upper() or None,
+                (city or "")[:100] or None,
+                (region or "")[:100] or None,
+                _to_float(latitude),
+                _to_float(longitude),
                 datetime.now(timezone.utc).isoformat(),
             ),
         )
@@ -892,6 +926,10 @@ async def tracked_download(filename: str, request: Request):
         _client_ip(request),
         request.headers.get("user-agent", ""),
         request.headers.get("cf-ipcountry", ""),
+        request.headers.get("cf-ipcity", ""),
+        request.headers.get("cf-region", ""),
+        request.headers.get("cf-iplatitude", ""),
+        request.headers.get("cf-iplongitude", ""),
     )
 
     return FileResponse(path, media_type=media_type, filename=safe_name)
@@ -1043,6 +1081,14 @@ def admin_stats(_: bool = Depends(require_admin)):
             GROUP BY country ORDER BY COUNT(*) DESC
             """
         ).fetchall()
+        downloads_by_city = conn.execute(
+            """
+            SELECT city, region, country, AVG(latitude), AVG(longitude), COUNT(*)
+            FROM downloads
+            WHERE city IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL
+            GROUP BY city, country ORDER BY COUNT(*) DESC
+            """
+        ).fetchall()
 
         total_usage = conn.execute("SELECT COUNT(*) FROM usage_events").fetchone()[0]
         usage_success = conn.execute(
@@ -1088,6 +1134,10 @@ def admin_stats(_: bool = Depends(require_admin)):
             "by_version": [{"version": v, "count": c} for v, c in downloads_by_version],
             "by_day": [{"day": d, "count": c} for d, c in downloads_by_day],
             "by_country": [{"country": c, "count": n} for c, n in downloads_by_country],
+            "by_city": [
+                {"city": city, "region": region, "country": country, "lat": lat, "lon": lon, "count": n}
+                for city, region, country, lat, lon, n in downloads_by_city
+            ],
         },
         "usage": {
             "total": total_usage,
@@ -1130,6 +1180,7 @@ ADMIN_HTML = """<!DOCTYPE html>
 <title>DocPilote — Admin</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsvectormap@1.7.0/dist/jsvectormap.min.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   :root{--bg:#0b0f14;--card:#141c27;--border:#223042;--text:#e8eef4;--muted:#9fb0c3;--accent:#4fd1c5;--accent2:#7c9cff;--bad:#ff8e8e;}
   *{box-sizing:border-box;}
@@ -1149,6 +1200,9 @@ ADMIN_HTML = """<!DOCTYPE html>
   .ok{color:var(--accent);}
   .refresh{color:var(--muted);font-size:.8rem;}
   #map{width:100%;height:420px;background:transparent;}
+  #city-map{width:100%;height:420px;background:transparent;border-radius:8px;}
+  .leaflet-popup-content-wrapper{background:#141c27;color:#e8edf2;}
+  .leaflet-popup-tip{background:#141c27;}
   .jvm-zoom-btn{background:var(--card);border:1px solid var(--border);color:var(--text);}
   .jvm-tooltip{background:var(--card);border:1px solid var(--border);color:var(--text);}
 </style>
@@ -1162,6 +1216,12 @@ ADMIN_HTML = """<!DOCTYPE html>
 <section>
 <h2>Téléchargements par pays</h2>
 <div id="map"></div>
+</section>
+
+<section>
+<h2>Villes des téléchargeurs</h2>
+<p class="sub" style="margin:0 0 12px;">Géolocalisation approximative basée sur l'IP (Cloudflare), jamais l'IP elle-même. Taille du point proportionnelle au nombre de téléchargements.</p>
+<div id="city-map"></div>
 </section>
 
 <section>
@@ -1196,8 +1256,38 @@ ADMIN_HTML = """<!DOCTYPE html>
 
 <script src="https://cdn.jsdelivr.net/npm/jsvectormap@1.7.0/dist/jsvectormap.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsvectormap@1.7.0/dist/maps/world.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 let worldMap = null;
+let cityMap = null;
+let cityMarkers = [];
+
+function renderCityMap(byCity){
+  if(!cityMap){
+    cityMap = L.map('city-map', {scrollWheelZoom:false}).setView([46.6, 2.5], 5);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap &copy; CARTO',
+      maxZoom: 18,
+    }).addTo(cityMap);
+  }
+  for(const m of cityMarkers){ cityMap.removeLayer(m); }
+  cityMarkers = [];
+  if(!byCity || byCity.length === 0) return;
+  const maxCount = Math.max(...byCity.map(r => r.count));
+  for(const row of byCity){
+    if(row.lat == null || row.lon == null) continue;
+    const radius = 6 + (row.count / maxCount) * 22;
+    const marker = L.circleMarker([row.lat, row.lon], {
+      radius,
+      color: '#4fd1c5',
+      weight: 1,
+      fillColor: '#4fd1c5',
+      fillOpacity: 0.45,
+    }).addTo(cityMap);
+    marker.bindPopup(`<strong>${row.city}</strong>${row.region ? ' — ' + row.region : ''}<br>${row.count} téléchargement${row.count > 1 ? 's' : ''}`);
+    cityMarkers.push(marker);
+  }
+}
 
 function renderMap(byCountry){
   const values = {};
@@ -1251,6 +1341,7 @@ async function load(){
 
   const dlVersionBody = document.querySelector('#dl-version tbody');
   renderMap(d.downloads.by_country || []);
+  renderCityMap(d.downloads.by_city || []);
 
   dlVersionBody.innerHTML = d.downloads.by_version.map(r => `<tr><td>v${r.version}</td><td>${r.count}</td></tr>`).join('') || '<tr><td colspan=2>Aucune donnée</td></tr>';
 
