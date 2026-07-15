@@ -40,6 +40,7 @@ client/
   thunar/docpilote_thunar_extension.py
   kio/docpilote.desktop                  # Service menu KDE/Dolphin
   windows/docpilote_client_windows.py    # Client Windows
+  windows/docpilote_client.spec          # Spec PyInstaller (build .exe, icone embarquee)
 
 server/
   main.py               # API FastAPI (relai Mistral, quotas, licences, Stripe)
@@ -50,6 +51,7 @@ packaging/
   debian/                # control, postinst, postrm pour le .deb
   docpilote.nsi          # Installeur Windows NSIS (généré par gen_nsi.py)
   gen_nsi.py             # Génère docpilote.nsi (registre par extension)
+  assets/docpilote.ico   # Icône multi-résolution (16 à 256px), exe + installeur
 ```
 
 ## Lancer le serveur en local

@@ -26,6 +26,8 @@ SetCompressor /SOLID lzma
 
 !include "MUI2.nsh"
 !define MUI_ABORTWARNING
+!define MUI_ICON "docpilote.ico"
+!define MUI_UNICON "docpilote.ico"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
