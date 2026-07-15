@@ -48,7 +48,8 @@ server/
 
 packaging/
   debian/                # control, postinst, postrm pour le .deb
-  docpilote.nsi          # Installeur Windows NSIS
+  docpilote.nsi          # Installeur Windows NSIS (généré par gen_nsi.py)
+  gen_nsi.py             # Génère docpilote.nsi (registre par extension)
 ```
 
 ## Lancer le serveur en local

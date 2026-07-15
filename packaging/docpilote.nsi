@@ -64,6 +64,8 @@ Section "Install"
     WriteRegStr HKCU "Software\Classes\DocPilote.Actions\Shell\ask\command" "" '"$INSTDIR\docpilote_client.exe" ask "%1"'
     WriteRegStr HKCU "Software\Classes\DocPilote.Actions\Shell\transform" "MUIVerb" "Transformer"
     WriteRegStr HKCU "Software\Classes\DocPilote.Actions\Shell\transform\command" "" '"$INSTDIR\docpilote_client.exe" transform "%1"'
+    WriteRegStr HKCU "Software\Classes\DocPilote.Actions\Shell\activate-license" "MUIVerb" "🔑 Activer une licence"
+    WriteRegStr HKCU "Software\Classes\DocPilote.Actions\Shell\activate-license\command" "" '"$INSTDIR\docpilote_client.exe" activate-license'
 
     ; -------------------------------------------------------------
     ; Enregistrement du menu "DocPilote" (cascade) + verbe "Comparer"
@@ -239,6 +241,13 @@ Section "Install"
     WriteRegStr HKCU "Software\Classes\SystemFileAssociations\.rtf\shell\DocPiloteCompare" "MultiSelectModel" "Player"
     WriteRegStr HKCU "Software\Classes\SystemFileAssociations\.rtf\shell\DocPiloteCompare\command" "" '"$INSTDIR\docpilote_client.exe" compare %1'
 
+    ; Activer une licence depuis le clic droit dans le vide (fond de dossier),
+    ; sans devoir selectionner un document au prealable -- equivalent Windows
+    ; du get_background_items() de l'extension Nautilus Linux.
+    WriteRegStr HKCU "Software\Classes\Directory\Background\shell\DocPiloteActivateLicense" "" "DocPilote — Activer une licence"
+    WriteRegStr HKCU "Software\Classes\Directory\Background\shell\DocPiloteActivateLicense" "Icon" "$INSTDIR\docpilote_client.exe"
+    WriteRegStr HKCU "Software\Classes\Directory\Background\shell\DocPiloteActivateLicense\command" "" '"$INSTDIR\docpilote_client.exe" activate-license'
+
     ; Raccourci menu Démarrer : "DocPilote — Activer une licence"
     CreateDirectory "$SMPROGRAMS\DocPilote"
     CreateShortcut "$SMPROGRAMS\DocPilote\DocPilote - Activer une licence.lnk" \
@@ -266,6 +275,7 @@ Section "Uninstall"
     DeleteRegKey HKCU "Software\Classes\DocPilote.Actions\Shell\extract"
     DeleteRegKey HKCU "Software\Classes\DocPilote.Actions\Shell\ask"
     DeleteRegKey HKCU "Software\Classes\DocPilote.Actions\Shell\transform"
+    DeleteRegKey HKCU "Software\Classes\DocPilote.Actions\Shell\activate-license"
     DeleteRegKey HKCU "Software\Classes\SystemFileAssociations\.pdf\shell\DocPilote"
     DeleteRegKey HKCU "Software\Classes\SystemFileAssociations\.pdf\shell\DocPiloteCompare"
     DeleteRegKey HKCU "Software\Classes\SystemFileAssociations\.docx\shell\DocPilote"
@@ -292,6 +302,7 @@ Section "Uninstall"
     DeleteRegKey HKCU "Software\Classes\SystemFileAssociations\.md\shell\DocPiloteCompare"
     DeleteRegKey HKCU "Software\Classes\SystemFileAssociations\.rtf\shell\DocPilote"
     DeleteRegKey HKCU "Software\Classes\SystemFileAssociations\.rtf\shell\DocPiloteCompare"
+    DeleteRegKey HKCU "Software\Classes\Directory\Background\shell\DocPiloteActivateLicense"
 
     DeleteRegKey HKCU "Software\Classes\DocPilote.Actions"
     DeleteRegKey HKCU "Software\DocPilote"
