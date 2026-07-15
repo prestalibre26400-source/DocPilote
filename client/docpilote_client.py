@@ -23,7 +23,7 @@ from gi.repository import Gdk, GLib, Gtk, Pango  # noqa: E402
 API_URL = "https://docpilote.prestalibre.org/api"
 PRICING_URL = "https://docpilote.prestalibre.org/#pricing"
 
-CLIENT_VERSION = "0.13.6"
+CLIENT_VERSION = "0.13.7"
 LICENSE_FILE = os.path.expanduser("~/.config/docpilote/license.key")
 VERSION_CHECK_CACHE = os.path.expanduser("~/.cache/docpilote/last_version_check.json")
 VERSION_CHECK_INTERVAL_S = 12 * 3600  # ne vérifie qu'une fois toutes les 12h max
@@ -262,7 +262,13 @@ def markdown_to_pango(content):
         heading_match = re.match(r"^(#{1,6})\s+(.*)$", stripped)
         if heading_match:
             level = len(heading_match.group(1))
-            text = _pango_escape(heading_match.group(2).strip())
+            # _apply_inline_pango est indispensable ici : un titre Markdown
+            # peut lui-meme contenir du gras/italique (ex: "## **Conclusion :**",
+            # ce que Mistral genere en pratique) -- sans cette conversion, les
+            # '**' restaient visibles tels quels UNIQUEMENT sur les titres,
+            # alors que le gras inline dans le corps du texte etait converti
+            # normalement (signale par un client via capture d'ecran).
+            text = _apply_inline_pango(_pango_escape(heading_match.group(2).strip()))
             size = "x-large" if level == 1 else "large"
             out_lines.append(f'<span size="{size}" weight="bold">{text}</span>')
             continue
