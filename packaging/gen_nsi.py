@@ -36,7 +36,7 @@ HEADER = r'''; DocPilote pour Windows — installeur NSIS (généré par gen_nsi
 ; pour ce projet), à valider par Camille lors du premier vrai test.
 
 !define PRODUCT_NAME "DocPilote"
-!define PRODUCT_VERSION "1.0.3"
+!define PRODUCT_VERSION "1.0.4"
 !define PRODUCT_PUBLISHER "Prestalibre"
 !define PRODUCT_URL "https://docpilote.prestalibre.org"
 
