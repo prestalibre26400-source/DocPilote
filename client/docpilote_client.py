@@ -23,7 +23,7 @@ from gi.repository import Gdk, GLib, Gtk, Pango  # noqa: E402
 API_URL = "https://docpilote.prestalibre.org/api"
 PRICING_URL = "https://docpilote.prestalibre.org/#pricing"
 
-CLIENT_VERSION = "0.13.4"
+CLIENT_VERSION = "0.13.5"
 LICENSE_FILE = os.path.expanduser("~/.config/docpilote/license.key")
 VERSION_CHECK_CACHE = os.path.expanduser("~/.cache/docpilote/last_version_check.json")
 VERSION_CHECK_INTERVAL_S = 12 * 3600  # ne vérifie qu'une fois toutes les 12h max
@@ -492,11 +492,18 @@ def activate_license():
 
     existing = load_license_key()
     prefill = existing or ""
+    # Le lien d'abonnement est affiche directement dans le texte du prompt
+    # (zenity --entry n'a pas de veritable lien cliquable) : sans ca, un
+    # utilisateur qui ouvre cette fenetre sans avoir encore de cle n'a aucun
+    # moyen de savoir qu'il doit d'abord s'abonner -- le lien n'apparaissait
+    # auparavant que dans le message d'erreur, apres une tentative de cle
+    # invalide.
     _, key = zenity(
         [
             "--entry",
             "--title=DocPilote — Activer une licence",
-            "--text=Collez votre clé de licence (recue par email apres l'abonnement) :",
+            "--text=Collez votre clé de licence (reçue par email après l'abonnement) :\n"
+            f"Pas encore de licence ? Abonnez-vous ici : {PRICING_URL}",
             f"--entry-text={prefill}",
             "--width=440",
         ]

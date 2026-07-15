@@ -141,7 +141,7 @@ if command -v thunar >/dev/null 2>&1; then
 fi
 
 echo ""
-echo "DocPilote est installé (v0.13.4)."
+echo "DocPilote est installé (v0.13.5)."
 if [ -n "$DETECTED" ]; then
   echo "Gestionnaire(s) de fichiers détecté(s) :$DETECTED"
 else

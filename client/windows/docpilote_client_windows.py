@@ -22,7 +22,7 @@ from tkinter import filedialog, messagebox, ttk
 API_URL = "https://docpilote.prestalibre.org/api"
 PRICING_URL = "https://docpilote.prestalibre.org/#pricing"
 
-CLIENT_VERSION = "1.0.5"
+CLIENT_VERSION = "1.0.6"
 
 APPDATA = os.environ.get("APPDATA", os.path.expanduser("~"))
 LOCALAPPDATA = os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))
@@ -485,7 +485,7 @@ def activate_license():
 
     root = tk.Tk()
     root.title("DocPilote — Activer une licence")
-    root.geometry("460x160")
+    root.geometry("460x200")
 
     tk.Label(
         root,
@@ -498,6 +498,27 @@ def activate_license():
     entry = tk.Entry(root, textvariable=entry_var, width=40, font=("Segoe UI", 10))
     entry.pack(pady=4)
     entry.focus_set()
+
+    # Lien visible vers la page d'abonnement : sans ca, quelqu'un qui ouvre
+    # cette fenetre sans avoir encore de cle n'a aucun moyen de savoir qu'il
+    # doit d'abord s'abonner (le lien PRICING_URL n'apparaissait auparavant
+    # que dans le message d'erreur, apres avoir tente une cle invalide).
+    pricing_link = tk.Label(
+        root,
+        text="Pas encore de licence ? S'abonner (paiement securise)",
+        font=("Segoe UI", 9, "underline"),
+        fg="#2a6fdb",
+        cursor="hand2",
+    )
+    pricing_link.pack(pady=(0, 4))
+
+    def open_pricing(_event=None):
+        try:
+            os.startfile(PRICING_URL)  # noqa: S606 (Windows uniquement)
+        except Exception:  # noqa: BLE001
+            pass
+
+    pricing_link.bind("<Button-1>", open_pricing)
 
     status_label = tk.Label(root, text="", font=("Segoe UI", 9), fg="#555")
     status_label.pack(pady=4)
