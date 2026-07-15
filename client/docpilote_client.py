@@ -23,7 +23,7 @@ from gi.repository import Gdk, GLib, Gtk, Pango  # noqa: E402
 API_URL = "https://docpilote.prestalibre.org/api"
 PRICING_URL = "https://docpilote.prestalibre.org/#pricing"
 
-CLIENT_VERSION = "0.13.5"
+CLIENT_VERSION = "0.13.6"
 LICENSE_FILE = os.path.expanduser("~/.config/docpilote/license.key")
 VERSION_CHECK_CACHE = os.path.expanduser("~/.cache/docpilote/last_version_check.json")
 VERSION_CHECK_INTERVAL_S = 12 * 3600  # ne vérifie qu'une fois toutes les 12h max
@@ -487,30 +487,76 @@ def activate_license():
     """Action independante (pas de fichier requis) : demande une cle de
     licence a l'utilisateur, la verifie aupres du serveur, et l'enregistre
     localement si valide. Accessible depuis le menu Applications (pas besoin
-    de selectionner un document)."""
-    import requests
+    de selectionner un document).
 
+    Fenetre GTK custom (pas zenity --entry) : un Gtk.LinkButton donne un
+    vrai lien cliquable vers PRICING_URL, contrairement au texte brut mis
+    dans le prompt zenity precedemment (signale par un client via capture
+    d'ecran -- le lien s'affichait mais n'etait pas cliquable, il fallait
+    le copier-coller a la main)."""
     existing = load_license_key()
-    prefill = existing or ""
-    # Le lien d'abonnement est affiche directement dans le texte du prompt
-    # (zenity --entry n'a pas de veritable lien cliquable) : sans ca, un
-    # utilisateur qui ouvre cette fenetre sans avoir encore de cle n'a aucun
-    # moyen de savoir qu'il doit d'abord s'abonner -- le lien n'apparaissait
-    # auparavant que dans le message d'erreur, apres une tentative de cle
-    # invalide.
-    _, key = zenity(
-        [
-            "--entry",
-            "--title=DocPilote — Activer une licence",
-            "--text=Collez votre clé de licence (reçue par email après l'abonnement) :\n"
-            f"Pas encore de licence ? Abonnez-vous ici : {PRICING_URL}",
-            f"--entry-text={prefill}",
-            "--width=440",
-        ]
+
+    window = Gtk.Window(title="DocPilote — Activer une licence")
+    window.set_default_size(440, 200)
+    window.set_position(Gtk.WindowPosition.CENTER)
+    window.set_resizable(False)
+
+    vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+    vbox.set_border_width(16)
+    window.add(vbox)
+
+    label = Gtk.Label(
+        label="Collez votre clé de licence\n(reçue par email après l'abonnement) :"
     )
-    key = (key or "").strip()
+    label.set_xalign(0.0)
+    vbox.pack_start(label, False, False, 0)
+
+    entry = Gtk.Entry()
+    entry.set_text(existing or "")
+    entry.set_activates_default(True)
+    vbox.pack_start(entry, False, False, 0)
+
+    link = Gtk.LinkButton.new_with_label(
+        PRICING_URL, "Pas encore de licence ? S'abonner (paiement sécurisé)"
+    )
+    link.set_halign(Gtk.Align.START)
+    vbox.pack_start(link, False, False, 0)
+
+    button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+    button_box.set_halign(Gtk.Align.END)
+    vbox.pack_start(button_box, False, False, 0)
+
+    result_box = {"key": None}
+
+    def on_cancel(_btn):
+        result_box["key"] = None
+        window.close()
+
+    def on_validate(_btn=None):
+        result_box["key"] = entry.get_text().strip()
+        window.close()
+
+    cancel_btn = Gtk.Button(label="Annuler")
+    cancel_btn.connect("clicked", on_cancel)
+    button_box.pack_start(cancel_btn, False, False, 0)
+
+    validate_btn = Gtk.Button(label="Valider")
+    validate_btn.set_can_default(True)
+    validate_btn.connect("clicked", on_validate)
+    button_box.pack_start(validate_btn, False, False, 0)
+
+    window.set_default(validate_btn)
+    entry.connect("activate", on_validate)
+    window.connect("destroy", lambda _w: Gtk.main_quit())
+    window.show_all()
+    entry.grab_focus()
+    Gtk.main()
+
+    key = (result_box["key"] or "").strip()
     if not key:
         sys.exit(0)
+
+    import requests
 
     try:
         resp = requests.get(
