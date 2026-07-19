@@ -10,6 +10,7 @@ supplémentaire) pour permettre une compilation autonome via PyInstaller.
 """
 import hashlib
 import json
+import locale
 import os
 import re
 import subprocess
@@ -30,28 +31,207 @@ LICENSE_FILE = os.path.join(APPDATA, "DocPilote", "license.key")
 VERSION_CHECK_CACHE = os.path.join(LOCALAPPDATA, "DocPilote", "last_version_check.json")
 VERSION_CHECK_INTERVAL_S = 12 * 3600  # ne vérifie qu'une fois toutes les 12h max
 
-TRANSFORM_TARGETS = [
-    ("mail", "Mail"),
-    ("procedure", "Procédure"),
-    ("synthese", "Synthèse"),
-    ("tableau", "Tableau"),
-    ("presentation", "Présentation"),
-    ("compte_rendu", "Compte rendu"),
-]
 
-TITLES = {
-    "activate-license": "Activer une licence",
-    "summarize": "Résumer",
-    "respond": "Préparer une réponse",
-    "explain": "Explique-moi ce document",
-    "decide": "Actions à entreprendre",
-    "risks": "Risques détectés",
-    "checklist": "Checklist",
-    "extract": "Données extraites (JSON)",
-    "ask": "Réponse",
-    "transform": "Transformer",
-    "compare": "Comparer",
+# ---------------------------------------------------------------------------
+# Internationalisation (FR par defaut, EN si systeme anglophone ou override).
+# Meme logique que le client Linux (docpilote_client.py) : pas de framework
+# i18n, detection via DOCPILOTE_LANG puis la locale Windows (via le module
+# locale + variables d'environnement, winreg en dernier recours).
+# ---------------------------------------------------------------------------
+
+
+def detect_lang():
+    override = os.environ.get("DOCPILOTE_LANG", "").strip().lower()
+    if override in ("fr", "en"):
+        return override
+    candidates = []
+    try:
+        loc = locale.getlocale()[0]
+        if loc:
+            candidates.append(loc)
+    except Exception:  # noqa: BLE001
+        pass
+    for var in ("LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"):
+        val = os.environ.get(var)
+        if val:
+            candidates.append(val)
+    try:
+        import ctypes
+
+        windll = ctypes.windll.kernel32
+        lang_id = windll.GetUserDefaultUILanguage()
+        # 0x09 = anglais (tous sous-codes : en-US 0x0409, en-GB 0x0809...)
+        if (lang_id & 0xFF) == 0x09:
+            return "en"
+        if (lang_id & 0xFF) == 0x0C:  # 0x0C = francais
+            return "fr"
+    except Exception:  # noqa: BLE001
+        pass
+    for c in candidates:
+        if c.lower().startswith("en"):
+            return "en"
+    return "fr"
+
+
+LANG = detect_lang()
+
+STRINGS = {
+    "fr": {
+        "invalid_response": "Réponse invalide du service",
+        "quota_reached_activate": (
+            "\n\nActivez une licence (menu Démarrer → DocPilote — Activer une "
+            "licence) ou abonnez-vous : "
+        ),
+        "service_error": "Erreur du service DocPilote",
+        "copy_btn": "\U0001F4CB Copier",
+        "export_btn": "\U0001F4BE Exporter",
+        "close_btn": "Fermer",
+        "copied_clipboard": "Copié dans le presse-papiers.",
+        "exported_to": "Exporté vers {dest}",
+        "export_result_title": "Exporter le résultat",
+        "export_filename": "resultat.txt",
+        "file_not_found": "Fichier introuvable : {f}",
+        "unknown_action": "Action inconnue : {action}",
+        "select_two_docs": (
+            "Sélectionnez exactement 2 documents pour comparer.\n\n"
+            "Astuce Windows : sélectionnez les 2 fichiers avant de faire le "
+            "clic droit."
+        ),
+        "invalid_call_action": "Appel invalide (action manquante).",
+        "invalid_call_file": "Appel invalide (action ou fichier manquant).",
+        "ask_title": "DocPilote — Interroger",
+        "ask_prompt": "Posez votre question sur :\n{name}",
+        "transform_title": "DocPilote — Transformer",
+        "transform_prompt": "Transformer « {name} » en :",
+        "empty_result": (
+            "DocPilote n'a reçu aucun résultat du service (réponse vide). "
+            "Réessayez, et si le problème persiste, contactez le support."
+        ),
+        "activate_license_title": "DocPilote — Activer une licence",
+        "paste_license_label": (
+            "Collez votre clé de licence\n(reçue par email après l'abonnement) :"
+        ),
+        "subscribe_link": "Pas encore de licence ? S'abonner (paiement sécurisé)",
+        "cancel_btn": "Annuler",
+        "validate_btn": "Valider",
+        "activate_btn": "Activer",
+        "verifying": "Vérification en cours...",
+        "license_invalid": (
+            "Cette clé de licence n'est pas valide ou n'est plus active.\n"
+            "Vérifiez qu'elle a bien été copiée en entier, ou abonnez-vous ici :\n{url}"
+        ),
+        "license_network_error": "Impossible de vérifier la licence (réseau) : {exc}",
+        "license_activated": "Licence activée — usage illimité !",
+        "analyzing": "DocPilote analyse le document...",
+        "timeout_error": "Délai d'attente dépassé (le service ne répond pas).",
+        "update_available_title": "DocPilote",
+        "update_available_body": "Nouvelle version disponible : v{latest}\n(vous avez v{current})",
+        "download_btn": "Télécharger",
+        "later_btn": "Plus tard",
+        "titles": {
+            "activate-license": "Activer une licence",
+            "summarize": "Résumer",
+            "respond": "Préparer une réponse",
+            "explain": "Explique-moi ce document",
+            "decide": "Actions à entreprendre",
+            "risks": "Risques détectés",
+            "checklist": "Checklist",
+            "extract": "Données extraites (JSON)",
+            "ask": "Réponse",
+            "transform": "Transformer",
+            "compare": "Comparer",
+        },
+        "transform_targets": [
+            ("mail", "Mail"),
+            ("procedure", "Procédure"),
+            ("synthese", "Synthèse"),
+            ("tableau", "Tableau"),
+            ("presentation", "Présentation"),
+            ("compte_rendu", "Compte rendu"),
+        ],
+    },
+    "en": {
+        "invalid_response": "Invalid response from the service",
+        "quota_reached_activate": (
+            "\n\nActivate a license (Start menu → DocPilote — Activate a "
+            "license) or subscribe: "
+        ),
+        "service_error": "DocPilote service error",
+        "copy_btn": "\U0001F4CB Copy",
+        "export_btn": "\U0001F4BE Export",
+        "close_btn": "Close",
+        "copied_clipboard": "Copied to clipboard.",
+        "exported_to": "Exported to {dest}",
+        "export_result_title": "Export result",
+        "export_filename": "result.txt",
+        "file_not_found": "File not found: {f}",
+        "unknown_action": "Unknown action: {action}",
+        "select_two_docs": (
+            "Select exactly 2 documents to compare.\n\n"
+            "Windows tip: select both files before right-clicking."
+        ),
+        "invalid_call_action": "Invalid call (missing action).",
+        "invalid_call_file": "Invalid call (missing action or file).",
+        "ask_title": "DocPilote — Ask a question",
+        "ask_prompt": "Ask your question about:\n{name}",
+        "transform_title": "DocPilote — Transform",
+        "transform_prompt": "Transform \u201c{name}\u201d into:",
+        "empty_result": (
+            "DocPilote received no result from the service (empty response). "
+            "Try again, and contact support if the problem persists."
+        ),
+        "activate_license_title": "DocPilote — Activate a license",
+        "paste_license_label": (
+            "Paste your license key\n(received by email after subscribing):"
+        ),
+        "subscribe_link": "No license yet? Subscribe (secure payment)",
+        "cancel_btn": "Cancel",
+        "validate_btn": "Validate",
+        "activate_btn": "Activate",
+        "verifying": "Verifying...",
+        "license_invalid": (
+            "This license key is not valid or is no longer active.\n"
+            "Check that it was copied in full, or subscribe here:\n{url}"
+        ),
+        "license_network_error": "Could not verify the license (network): {exc}",
+        "license_activated": "License activated — unlimited usage!",
+        "analyzing": "DocPilote is analyzing the document...",
+        "timeout_error": "Timeout exceeded (the service is not responding).",
+        "update_available_title": "DocPilote",
+        "update_available_body": "New version available: v{latest}\n(you have v{current})",
+        "download_btn": "Download",
+        "later_btn": "Later",
+        "titles": {
+            "activate-license": "Activate a license",
+            "summarize": "Summarize",
+            "respond": "Prepare a reply",
+            "explain": "Explain this document",
+            "decide": "Actions to take",
+            "risks": "Risks detected",
+            "checklist": "Checklist",
+            "extract": "Extracted data (JSON)",
+            "ask": "Answer",
+            "transform": "Transform",
+            "compare": "Compare",
+        },
+        "transform_targets": [
+            ("mail", "Email"),
+            ("procedure", "Procedure"),
+            ("synthese", "Executive summary"),
+            ("tableau", "Table"),
+            ("presentation", "Presentation"),
+            ("compte_rendu", "Meeting minutes"),
+        ],
+    },
 }
+
+
+def t(key):
+    return STRINGS.get(LANG, STRINGS["fr"]).get(key, STRINGS["fr"].get(key, key))
+
+
+TRANSFORM_TARGETS = STRINGS.get(LANG, STRINGS["fr"]).get("transform_targets", STRINGS["fr"]["transform_targets"])
+TITLES = STRINGS.get(LANG, STRINGS["fr"]).get("titles", STRINGS["fr"]["titles"])
 
 
 def get_device_id():
@@ -117,7 +297,7 @@ def api_call(files, action, question=None, target=None):
             resp = requests.post(
                 f"{API_URL}/compare",
                 files={"file1": f1, "file2": f2},
-                data={"license_key": license_key, "device_id": device_id},
+                data={"license_key": license_key, "device_id": device_id, "lang": LANG},
                 timeout=120,
             )
     elif action == "extract":
@@ -125,7 +305,7 @@ def api_call(files, action, question=None, target=None):
             resp = requests.post(
                 f"{API_URL}/extract",
                 files={"file": f},
-                data={"license_key": license_key, "device_id": device_id},
+                data={"license_key": license_key, "device_id": device_id, "lang": LANG},
                 timeout=120,
             )
     elif action == "ask":
@@ -133,7 +313,7 @@ def api_call(files, action, question=None, target=None):
             resp = requests.post(
                 f"{API_URL}/ask",
                 files={"file": f},
-                data={"question": question, "license_key": license_key, "device_id": device_id},
+                data={"question": question, "license_key": license_key, "device_id": device_id, "lang": LANG},
                 timeout=120,
             )
     elif action == "transform":
@@ -141,7 +321,7 @@ def api_call(files, action, question=None, target=None):
             resp = requests.post(
                 f"{API_URL}/transform",
                 files={"file": f},
-                data={"target": target, "license_key": license_key, "device_id": device_id},
+                data={"target": target, "license_key": license_key, "device_id": device_id, "lang": LANG},
                 timeout=120,
             )
     else:
@@ -149,24 +329,23 @@ def api_call(files, action, question=None, target=None):
             resp = requests.post(
                 f"{API_URL}/process",
                 files={"file": f},
-                data={"plugin": action, "license_key": license_key, "device_id": device_id},
+                data={"plugin": action, "license_key": license_key, "device_id": device_id, "lang": LANG},
                 timeout=120,
             )
 
     try:
         data = resp.json()
     except ValueError:
-        raise RuntimeError("Réponse invalide du service")
+        raise RuntimeError(t("invalid_response"))
 
     if resp.status_code == 402:
         raise RuntimeError(
-            data.get("detail", "Quota gratuit atteint")
-            + "\n\nActivez une licence (menu Démarrer → DocPilote — Activer une "
-            "licence) ou abonnez-vous : " + PRICING_URL
+            data.get("detail", "Quota gratuit atteint" if LANG == "fr" else "Free quota reached")
+            + t("quota_reached_activate") + PRICING_URL
         )
 
     if resp.status_code != 200:
-        raise RuntimeError(data.get("detail", "Erreur du service DocPilote"))
+        raise RuntimeError(data.get("detail", t("service_error")))
 
     return data.get("result", "")
 
@@ -178,7 +357,9 @@ def api_call(files, action, question=None, target=None):
 # plan avec une barre de progression indéterminée pendant le traitement)
 # ---------------------------------------------------------------------------
 
-def run_with_busy_window(work_fn, message="DocPilote analyse le document..."):
+def run_with_busy_window(work_fn, message=None):
+    if message is None:
+        message = t("analyzing")
     result_box = {}
     done_event = threading.Event()
 
@@ -216,9 +397,7 @@ def run_with_busy_window(work_fn, message="DocPilote analyse le document..."):
             root.quit()
             return
         if time.time() > watchdog_deadline:
-            result_box.setdefault(
-                "error", "Délai d'attente dépassé (le service ne répond pas)."
-            )
+            result_box.setdefault("error", t("timeout_error"))
             root.quit()
             return
         root.after(100, poll)
@@ -340,26 +519,26 @@ def show_result_window(title, content):
     def copy_to_clipboard():
         root.clipboard_clear()
         root.clipboard_append(content)
-        messagebox.showinfo("DocPilote", "Copié dans le presse-papiers.", parent=root)
+        messagebox.showinfo("DocPilote", t("copied_clipboard"), parent=root)
 
     def export_to_file():
         dest = filedialog.asksaveasfilename(
-            title="Exporter le résultat",
+            title=t("export_result_title"),
             defaultextension=".txt",
-            initialfile="resultat.txt",
+            initialfile=t("export_filename"),
         )
         if dest:
             with open(dest, "w", encoding="utf-8") as f:
                 f.write(content)
-            messagebox.showinfo("DocPilote", f"Exporté vers {dest}", parent=root)
+            messagebox.showinfo("DocPilote", t("exported_to").format(dest=dest), parent=root)
 
-    tk.Button(btn_frame, text="📋 Copier", command=copy_to_clipboard).pack(
+    tk.Button(btn_frame, text=t("copy_btn"), command=copy_to_clipboard).pack(
         side="left", padx=(0, 6)
     )
-    tk.Button(btn_frame, text="💾 Exporter", command=export_to_file).pack(
+    tk.Button(btn_frame, text=t("export_btn"), command=export_to_file).pack(
         side="left", padx=(0, 6)
     )
-    tk.Button(btn_frame, text="Fermer", command=root.destroy).pack(side="right")
+    tk.Button(btn_frame, text=t("close_btn"), command=root.destroy).pack(side="right")
 
     root.mainloop()
 
@@ -393,7 +572,7 @@ def _show_update_toast(latest, download_url):
         toast.geometry("380x110")
         tk.Label(
             toast,
-            text=f"Nouvelle version disponible : v{latest}\n(vous avez v{CLIENT_VERSION})",
+            text=t("update_available_body").format(latest=latest, current=CLIENT_VERSION),
             font=("Segoe UI", 10),
             pady=10,
         ).pack()
@@ -408,11 +587,11 @@ def _show_update_toast(latest, download_url):
 
         frame = tk.Frame(toast)
         frame.pack(pady=6)
-        tk.Button(frame, text="Télécharger", command=open_download).pack(
+        tk.Button(frame, text=t("download_btn"), command=open_download).pack(
             side="left", padx=4
         )
         tk.Button(
-            frame, text="Plus tard", command=lambda: (toast.destroy(), root.destroy())
+            frame, text=t("later_btn"), command=lambda: (toast.destroy(), root.destroy())
         ).pack(side="left", padx=4)
         toast.after(15000, lambda: (toast.destroy(), root.destroy()))
         root.mainloop()
@@ -484,12 +663,12 @@ def activate_license():
     import requests
 
     root = tk.Tk()
-    root.title("DocPilote — Activer une licence")
+    root.title(t("activate_license_title"))
     root.geometry("460x200")
 
     tk.Label(
         root,
-        text="Collez votre clé de licence\n(reçue par email après l'abonnement) :",
+        text=t("paste_license_label"),
         font=("Segoe UI", 10),
         pady=10,
     ).pack()
@@ -505,7 +684,7 @@ def activate_license():
     # que dans le message d'erreur, apres avoir tente une cle invalide).
     pricing_link = tk.Label(
         root,
-        text="Pas encore de licence ? S'abonner (paiement securise)",
+        text=t("subscribe_link"),
         font=("Segoe UI", 9, "underline"),
         fg="#2a6fdb",
         cursor="hand2",
@@ -528,7 +707,7 @@ def activate_license():
         if not key:
             root.destroy()
             return
-        status_label.config(text="Vérification en cours...")
+        status_label.config(text=t("verifying"))
         root.update_idletasks()
         try:
             resp = requests.get(
@@ -539,15 +718,20 @@ def activate_license():
             data = resp.json()
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror(
-                "DocPilote", f"Impossible de vérifier la licence (réseau) : {exc}",
+                "DocPilote", t("license_network_error").format(exc=exc),
                 parent=root,
             )
             return
 
         if data.get("device_conflict"):
+            default_msg = (
+                "Cette licence est déjà active sur un autre appareil."
+                if LANG == "fr"
+                else "This license is already active on another device."
+            )
             messagebox.showerror(
                 "DocPilote",
-                data.get("message", "Cette licence est déjà active sur un autre appareil."),
+                data.get("message", default_msg),
                 parent=root,
             )
             return
@@ -555,25 +739,23 @@ def activate_license():
         if not data.get("valid"):
             messagebox.showerror(
                 "DocPilote",
-                "Cette clé de licence n'est pas valide ou n'est plus active.\n"
-                "Vérifiez qu'elle a bien été copiée en entier, ou abonnez-vous ici :\n"
-                f"{PRICING_URL}",
+                t("license_invalid").format(url=PRICING_URL),
                 parent=root,
             )
             return
 
         save_license_key(key)
         messagebox.showinfo(
-            "DocPilote", "Licence activée — usage illimité !", parent=root
+            "DocPilote", t("license_activated"), parent=root
         )
         root.destroy()
 
     btn_frame = tk.Frame(root)
     btn_frame.pack(pady=8)
-    tk.Button(btn_frame, text="Activer", command=submit, width=12).pack(
+    tk.Button(btn_frame, text=t("activate_btn"), command=submit, width=12).pack(
         side="left", padx=6
     )
-    tk.Button(btn_frame, text="Annuler", command=root.destroy, width=12).pack(
+    tk.Button(btn_frame, text=t("cancel_btn"), command=root.destroy, width=12).pack(
         side="left", padx=6
     )
 
@@ -588,12 +770,12 @@ def activate_license():
 def ask_question_dialog(files):
     result = {"value": None}
     root = tk.Tk()
-    root.title("DocPilote — Interroger")
+    root.title(t("ask_title"))
     root.geometry("440x140")
 
     tk.Label(
         root,
-        text=f"Posez votre question sur :\n{basename_label(files)}",
+        text=t("ask_prompt").format(name=basename_label(files)),
         font=("Segoe UI", 10),
         pady=8,
     ).pack()
@@ -608,10 +790,10 @@ def ask_question_dialog(files):
 
     btn_frame = tk.Frame(root)
     btn_frame.pack(pady=8)
-    tk.Button(btn_frame, text="Valider", command=submit, width=12).pack(
+    tk.Button(btn_frame, text=t("validate_btn"), command=submit, width=12).pack(
         side="left", padx=6
     )
-    tk.Button(btn_frame, text="Annuler", command=root.destroy, width=12).pack(
+    tk.Button(btn_frame, text=t("cancel_btn"), command=root.destroy, width=12).pack(
         side="left", padx=6
     )
     root.bind("<Return>", lambda _e: submit())
@@ -622,12 +804,12 @@ def ask_question_dialog(files):
 def choose_transform_target_dialog(files):
     result = {"value": None}
     root = tk.Tk()
-    root.title("DocPilote — Transformer")
+    root.title(t("transform_title"))
     root.geometry("380x320")
 
     tk.Label(
         root,
-        text=f"Transformer « {basename_label(files)} » en :",
+        text=t("transform_prompt").format(name=basename_label(files)),
         font=("Segoe UI", 10),
         pady=8,
         wraplength=340,
@@ -645,10 +827,10 @@ def choose_transform_target_dialog(files):
 
     btn_frame = tk.Frame(root)
     btn_frame.pack(pady=10)
-    tk.Button(btn_frame, text="Valider", command=submit, width=12).pack(
+    tk.Button(btn_frame, text=t("validate_btn"), command=submit, width=12).pack(
         side="left", padx=6
     )
-    tk.Button(btn_frame, text="Annuler", command=root.destroy, width=12).pack(
+    tk.Button(btn_frame, text=t("cancel_btn"), command=root.destroy, width=12).pack(
         side="left", padx=6
     )
     root.mainloop()
@@ -664,7 +846,7 @@ def main():
 
     args = sys.argv[1:]
     if not args:
-        show_error("Appel invalide (action manquante).")
+        show_error(t("invalid_call_action"))
         sys.exit(1)
 
     if args[0] == "activate-license":
@@ -672,7 +854,7 @@ def main():
         return
 
     if len(args) < 2:
-        show_error("Appel invalide (action ou fichier manquant).")
+        show_error(t("invalid_call_file"))
         sys.exit(1)
 
     action = args[0]
@@ -680,19 +862,15 @@ def main():
 
     for f in files:
         if not os.path.isfile(f):
-            show_error(f"Fichier introuvable : {f}")
+            show_error(t("file_not_found").format(f=f))
             sys.exit(1)
 
     if action not in TITLES:
-        show_error(f"Action inconnue : {action}")
+        show_error(t("unknown_action").format(action=action))
         sys.exit(1)
 
     if action == "compare" and len(files) < 2:
-        show_error(
-            "Sélectionnez exactement 2 documents pour comparer.\n\n"
-            "Astuce Windows : sélectionnez les 2 fichiers avant de faire le "
-            "clic droit."
-        )
+        show_error(t("select_two_docs"))
         sys.exit(1)
 
     question = None
@@ -717,10 +895,7 @@ def main():
         sys.exit(1)
 
     if not result:
-        show_error(
-            "DocPilote n'a reçu aucun résultat du service (réponse vide). "
-            "Réessayez, et si le problème persiste, contactez le support."
-        )
+        show_error(t("empty_result"))
         sys.exit(1)
 
     title = f"DocPilote — {TITLES.get(action, action)} — {basename_label(files)}"

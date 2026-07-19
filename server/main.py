@@ -427,30 +427,48 @@ def require_admin(credentials: HTTPBasicCredentials = Depends(security)):
 
 # ---------------------------------------------------------------------------
 # Prompts pour les plugins "un fichier -> un texte"
+#
+# Multilingue : les instructions donnees au modele restent en francais (seule
+# langue maintenue dans le code), mais la LANGUE DE SORTIE demandee au modele
+# est parametrable via `lang` ("fr" par defaut, retro-compatible avec les
+# clients existants qui n'envoient pas ce champ). Un LLM suit tres bien une
+# consigne "redige ta reponse en anglais" meme si l'instruction elle-meme est
+# en francais -> pas besoin de dupliquer chaque prompt par langue.
 # ---------------------------------------------------------------------------
+
+LANG_LABELS = {
+    "fr": "français",
+    "en": "anglais",
+}
+
+
+def lang_label(lang: str) -> str:
+    return LANG_LABELS.get(lang, LANG_LABELS["fr"])
+
 
 PLUGIN_PROMPTS = {
     "summarize": (
-        "Résume ce document en français, de façon claire et structurée "
+        "Résume ce document en {label}, de façon claire et structurée "
         "(points clés en puces si pertinent). Reste concis (200-300 mots max).\n\n"
         "Document:\n{text}"
     ),
     "respond": (
         "Tu es un assistant qui aide un professionnel à répondre à un document reçu "
         "(réclamation, courrier, demande...). Analyse ce document et rédige une "
-        "proposition de réponse professionnelle et adaptée en français.\n"
+        "proposition de réponse professionnelle et adaptée en {label}.\n"
         "- Si c'est une réclamation : propose une réponse empathique et posée.\n"
         "- Si c'est une demande d'information : réponds aux points soulevés.\n"
         "- Si un refus argumenté est plus approprié, rédige-le clairement, sans être cassant.\n"
-        "Termine par une formule de politesse professionnelle. Indique en une ligne, "
-        "avant le texte de réponse, le type de réponse choisi (mail / lettre / "
-        "refus argumenté / demande d'information).\n\n"
+        "Termine par une formule de politesse professionnelle adaptée à la langue de sortie. "
+        "Indique en une ligne, avant le texte de réponse, le type de réponse choisi (mail / "
+        "lettre / refus argumenté / demande d'information), dans cette même langue de sortie.\n\n"
         "Document reçu:\n{text}"
     ),
     "explain": (
-        "Explique ce document en français de façon claire et structurée, pas comme un "
+        "Explique ce document en {label} de façon claire et structurée, pas comme un "
         "résumé générique mais comme une vraie explication utile pour quelqu'un qui doit "
-        "agir dessus. Structure ta réponse en sections :\n"
+        "agir dessus. Structure ta réponse en sections (titres de sections traduits dans la "
+        "langue de sortie demandée) :\n"
         "**Résumé** (2-3 phrases)\n"
         "**Obligations** (ce que chaque partie doit faire)\n"
         "**Risques** (ce qui pourrait mal se passer)\n"
@@ -460,7 +478,7 @@ PLUGIN_PROMPTS = {
         "Document:\n{text}"
     ),
     "decide": (
-        "Analyse ce document et réponds uniquement à la question : "
+        "Analyse ce document et réponds uniquement à la question, en {label} : "
         "quelles actions concrètes la personne qui reçoit ce document doit-elle entreprendre, "
         "et dans quel délai ? Liste les actions sous forme de checklist avec des ✓, "
         "en précisant les délais et échéances quand ils sont mentionnés. "
@@ -468,8 +486,8 @@ PLUGIN_PROMPTS = {
         "Document:\n{text}"
     ),
     "risks": (
-        "Analyse ce document comme le ferait un auditeur des risques. Identifie les points "
-        "problématiques ou déséquilibrés pour la partie qui le reçoit : pénalités élevées, "
+        "Analyse ce document comme le ferait un auditeur des risques, en {label}. Identifie les "
+        "points problématiques ou déséquilibrés pour la partie qui le reçoit : pénalités élevées, "
         "clauses de renouvellement automatique, absence de limitation de responsabilité, "
         "délais trop courts, obligations disproportionnées, zones d'ambiguïté, etc. "
         "Présente chaque risque identifié avec ⚠️ suivi d'une courte explication. "
@@ -477,7 +495,7 @@ PLUGIN_PROMPTS = {
         "Document:\n{text}"
     ),
     "checklist": (
-        "Transforme ce document en checklist pratique et actionnable en français. "
+        "Transforme ce document en checklist pratique et actionnable en {label}. "
         "Identifie le type de document (cahier des charges, notice, procédure...) et "
         "génère une liste à cocher (☐) des éléments à vérifier, faire ou respecter, "
         "organisée par catégories si pertinent. Reste concret, pas de généralités.\n\n"
@@ -488,14 +506,14 @@ PLUGIN_PROMPTS = {
 EXTRACT_PROMPT = (
     "Extrait les données structurées importantes de ce document (facture, contrat, "
     "formulaire...) et retourne-les STRICTEMENT au format JSON valide, sans texte autour, "
-    "sans balises markdown. Utilise des clés en français, snake_case. Inclue par exemple "
+    "sans balises markdown. Utilise des clés en {label}, snake_case. Inclue par exemple "
     "(si présents) : émetteur, destinataire, date, montants, échéances, références, "
     "articles, obligations. N'invente aucune donnée absente du document.\n\n"
     "Document:\n{text}"
 )
 
 COMPARE_PROMPT = (
-    "Compare ces deux versions d'un même document en français. Identifie les différences "
+    "Compare ces deux versions d'un même document, en {label}. Identifie les différences "
     "significatives (articles modifiés, montants changés, clauses ajoutées ou supprimées, "
     "durées modifiées...). Présente le résultat de façon structurée, par exemple :\n"
     "**Article X modifié**\n"
@@ -507,7 +525,7 @@ COMPARE_PROMPT = (
 )
 
 ASK_PROMPT = (
-    "Tu réponds à une question précise sur le document ci-dessous, en français. "
+    "Tu réponds à une question précise sur le document ci-dessous, en {label}. "
     "Réponds uniquement à partir du contenu du document. Si la réponse ne s'y trouve pas, "
     "dis-le clairement plutôt que d'inventer.\n\n"
     "Question : {question}\n\n"
@@ -936,7 +954,7 @@ async def tracked_download(filename: str, request: Request):
 
 
 @app.post("/process")
-async def process(request: Request, file: UploadFile = File(...), plugin: str = Form("summarize"), license_key: str = Form(""), device_id: str = Form("")):
+async def process(request: Request, file: UploadFile = File(...), plugin: str = Form("summarize"), license_key: str = Form(""), device_id: str = Form(""), lang: str = Form("fr")):
     started = time.monotonic()
     ext = os.path.splitext((file.filename or "").lower())[1]
     try:
@@ -948,7 +966,7 @@ async def process(request: Request, file: UploadFile = File(...), plugin: str = 
         content = await read_upload_limited(file)
         text = extract_text(content, file.filename)
 
-        prompt = PLUGIN_PROMPTS[plugin].format(text=text)
+        prompt = PLUGIN_PROMPTS[plugin].format(label=lang_label(lang), text=text)
         result = call_mistral(prompt)
     except HTTPException as exc:
         log_usage("process", plugin, ext, False, str(exc.detail), int((time.monotonic() - started) * 1000), _client_ip(request))
@@ -958,7 +976,7 @@ async def process(request: Request, file: UploadFile = File(...), plugin: str = 
 
 
 @app.post("/extract")
-async def extract(request: Request, file: UploadFile = File(...), license_key: str = Form(""), device_id: str = Form("")):
+async def extract(request: Request, file: UploadFile = File(...), license_key: str = Form(""), device_id: str = Form(""), lang: str = Form("fr")):
     started = time.monotonic()
     ext = os.path.splitext((file.filename or "").lower())[1]
     try:
@@ -967,7 +985,7 @@ async def extract(request: Request, file: UploadFile = File(...), license_key: s
         content = await read_upload_limited(file)
         text = extract_text(content, file.filename)
 
-        prompt = EXTRACT_PROMPT.format(text=text)
+        prompt = EXTRACT_PROMPT.format(label=lang_label(lang), text=text)
         result = call_mistral(prompt, temperature=0.1)
 
         # Nettoyage basique si le modèle a entouré le JSON de balises markdown
@@ -984,7 +1002,7 @@ async def extract(request: Request, file: UploadFile = File(...), license_key: s
 
 
 @app.post("/compare")
-async def compare(request: Request, file1: UploadFile = File(...), file2: UploadFile = File(...), license_key: str = Form(""), device_id: str = Form("")):
+async def compare(request: Request, file1: UploadFile = File(...), file2: UploadFile = File(...), license_key: str = Form(""), device_id: str = Form(""), lang: str = Form("fr")):
     started = time.monotonic()
     ext = os.path.splitext((file1.filename or "").lower())[1]
     try:
@@ -997,7 +1015,7 @@ async def compare(request: Request, file1: UploadFile = File(...), file2: Upload
         text1 = extract_text(content1, file1.filename)
         text2 = extract_text(content2, file2.filename)
 
-        prompt = COMPARE_PROMPT.format(text1=text1, text2=text2)
+        prompt = COMPARE_PROMPT.format(label=lang_label(lang), text1=text1, text2=text2)
         result = call_mistral(prompt)
     except HTTPException as exc:
         log_usage("compare", None, ext, False, str(exc.detail), int((time.monotonic() - started) * 1000), _client_ip(request))
@@ -1007,7 +1025,7 @@ async def compare(request: Request, file1: UploadFile = File(...), file2: Upload
 
 
 @app.post("/ask")
-async def ask(request: Request, file: UploadFile = File(...), question: str = Form(...), license_key: str = Form(""), device_id: str = Form("")):
+async def ask(request: Request, file: UploadFile = File(...), question: str = Form(...), license_key: str = Form(""), device_id: str = Form(""), lang: str = Form("fr")):
     started = time.monotonic()
     ext = os.path.splitext((file.filename or "").lower())[1]
     try:
@@ -1019,7 +1037,7 @@ async def ask(request: Request, file: UploadFile = File(...), question: str = Fo
         content = await read_upload_limited(file)
         text = extract_text(content, file.filename)
 
-        prompt = ASK_PROMPT.format(question=question.strip(), text=text)
+        prompt = ASK_PROMPT.format(label=lang_label(lang), question=question.strip(), text=text)
         result = call_mistral(prompt)
     except HTTPException as exc:
         log_usage("ask", None, ext, False, str(exc.detail), int((time.monotonic() - started) * 1000), _client_ip(request))
@@ -1029,7 +1047,7 @@ async def ask(request: Request, file: UploadFile = File(...), question: str = Fo
 
 
 @app.post("/transform")
-async def transform(request: Request, file: UploadFile = File(...), target: str = Form(...), license_key: str = Form(""), device_id: str = Form("")):
+async def transform(request: Request, file: UploadFile = File(...), target: str = Form(...), license_key: str = Form(""), device_id: str = Form(""), lang: str = Form("fr")):
     started = time.monotonic()
     ext = os.path.splitext((file.filename or "").lower())[1]
     try:
@@ -1043,7 +1061,7 @@ async def transform(request: Request, file: UploadFile = File(...), target: str 
 
         prompt = (
             f"Transforme ce document en {TRANSFORM_TARGETS[target]}. "
-            "Réponds en français, directement avec le résultat, sans commentaire méta "
+            f"Réponds en {lang_label(lang)}, directement avec le résultat, sans commentaire méta "
             f"autour.\n\nDocument:\n{text}"
         )
         result = call_mistral(prompt)

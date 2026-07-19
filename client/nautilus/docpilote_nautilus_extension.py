@@ -11,6 +11,7 @@ La signature `def get_file_items(self, *args)` avec `files = args[-1]`
 fonctionne dans les deux cas car `files` est toujours le dernier argument
 positionnel, quelle que soit la version.
 """
+import locale
 import os
 import subprocess
 import urllib.parse
@@ -22,19 +23,95 @@ SUPPORTED_EXTENSIONS = (
     ".doc", ".xls", ".ppt", ".xlsx", ".pptx", ".ods", ".odp",
 )
 
-ACTIONS_SINGLE = [
-    ("summarize", "✦ Résumer"),
-    ("respond", "✎ Préparer une réponse"),
-    ("explain", "❓ Explique-moi ce document"),
-    ("decide", "✓ Quelles actions dois-je entreprendre ?"),
-    ("risks", "⚠️ Détecter les risques"),
-    ("checklist", "☑ Créer une checklist"),
-    ("extract", "{ } Extraire (JSON)"),
-    ("ask", "? Interroger ce document"),
-    ("transform", "⇄ Transformer..."),
-]
 
-ACTION_MULTI = ("compare", "↔ Comparer ces 2 documents")
+# ---------------------------------------------------------------------------
+# Internationalisation (FR par defaut, EN si systeme anglophone ou override).
+# Duplique volontairement (pas de module partage : ce fichier est charge par
+# le processus Nautilus-Python dans son propre contexte, sans garantie que
+# /opt/docpilote/client soit sur le sys.path) -- meme logique que
+# docpilote_client.py (client/nemo/thunar dupliquent aussi ce bloc).
+# ---------------------------------------------------------------------------
+
+
+def _detect_lang():
+    override = os.environ.get("DOCPILOTE_LANG", "").strip().lower()
+    if override in ("fr", "en"):
+        return override
+    candidates = []
+    try:
+        loc = locale.getlocale()[0]
+        if loc:
+            candidates.append(loc)
+    except Exception:  # noqa: BLE001
+        pass
+    for var in ("LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"):
+        val = os.environ.get(var)
+        if val:
+            candidates.append(val)
+    for c in candidates:
+        if c.lower().startswith("en"):
+            return "en"
+    return "fr"
+
+
+_LANG = _detect_lang()
+
+_ACTIONS_SINGLE = {
+    "fr": [
+        ("summarize", "✦ Résumer"),
+        ("respond", "✎ Préparer une réponse"),
+        ("explain", "❓ Explique-moi ce document"),
+        ("decide", "✓ Quelles actions dois-je entreprendre ?"),
+        ("risks", "⚠️ Détecter les risques"),
+        ("checklist", "☑ Créer une checklist"),
+        ("extract", "{ } Extraire (JSON)"),
+        ("ask", "? Interroger ce document"),
+        ("transform", "⇄ Transformer..."),
+    ],
+    "en": [
+        ("summarize", "✦ Summarize"),
+        ("respond", "✎ Prepare a reply"),
+        ("explain", "❓ Explain this document"),
+        ("decide", "✓ What actions should I take?"),
+        ("risks", "⚠️ Detect risks"),
+        ("checklist", "☑ Create a checklist"),
+        ("extract", "{ } Extract (JSON)"),
+        ("ask", "? Ask this document"),
+        ("transform", "⇄ Transform..."),
+    ],
+}
+
+_ACTION_MULTI = {
+    "fr": ("compare", "↔ Comparer ces 2 documents"),
+    "en": ("compare", "↔ Compare these 2 documents"),
+}
+
+_MENU_TIP = {
+    "fr": "Analyser ce document avec DocPilote",
+    "en": "Analyze this document with DocPilote",
+}
+
+_LICENSE_LABEL = {
+    "fr": "\U0001F511 Activer une licence",
+    "en": "\U0001F511 Activate a license",
+}
+
+_LICENSE_BACKGROUND_LABEL = {
+    "fr": "DocPilote \u2014 Activer une licence",
+    "en": "DocPilote \u2014 Activate a license",
+}
+
+_LICENSE_TIP = {
+    "fr": "Saisir votre clé de licence DocPilote Pro",
+    "en": "Enter your DocPilote Pro license key",
+}
+
+ACTIONS_SINGLE = _ACTIONS_SINGLE.get(_LANG, _ACTIONS_SINGLE["fr"])
+ACTION_MULTI = _ACTION_MULTI.get(_LANG, _ACTION_MULTI["fr"])
+MENU_TIP = _MENU_TIP.get(_LANG, _MENU_TIP["fr"])
+LICENSE_LABEL = _LICENSE_LABEL.get(_LANG, _LICENSE_LABEL["fr"])
+LICENSE_BACKGROUND_LABEL = _LICENSE_BACKGROUND_LABEL.get(_LANG, _LICENSE_BACKGROUND_LABEL["fr"])
+LICENSE_TIP = _LICENSE_TIP.get(_LANG, _LICENSE_TIP["fr"])
 
 RUN_SCRIPT = os.environ.get(
     "DOCPILOTE_RUN_SCRIPT", "/opt/docpilote/client/docpilote-run.sh"
@@ -73,7 +150,7 @@ class DocPiloteExtension(GObject.GObject, Nautilus.MenuProvider):
         top_item = Nautilus.MenuItem(
             name="DocPiloteExtension::root",
             label="DocPilote",
-            tip="Analyser ce document avec DocPilote",
+            tip=MENU_TIP,
             icon="accessories-text-editor",
         )
 
@@ -101,8 +178,8 @@ class DocPiloteExtension(GObject.GObject, Nautilus.MenuProvider):
 
         license_item = Nautilus.MenuItem(
             name="DocPiloteExtension::activate-license",
-            label="\U0001F511 Activer une licence",
-            tip="Saisir votre clé de licence DocPilote Pro",
+            label=LICENSE_LABEL,
+            tip=LICENSE_TIP,
         )
         license_item.connect(
             "activate", lambda _i: self._run("activate-license", [])
@@ -118,8 +195,8 @@ class DocPiloteExtension(GObject.GObject, Nautilus.MenuProvider):
         # remarque que get_file_items : signature variable selon la version).
         item = Nautilus.MenuItem(
             name="DocPiloteExtension::background-activate-license",
-            label="DocPilote \u2014 Activer une licence",
-            tip="Saisir votre clé de licence DocPilote Pro",
+            label=LICENSE_BACKGROUND_LABEL,
+            tip=LICENSE_TIP,
             icon="accessories-text-editor",
         )
         item.connect("activate", lambda _i: self._run("activate-license", []))
