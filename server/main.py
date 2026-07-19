@@ -55,8 +55,8 @@ MAX_TEXT_CHARS = 60000
 # Version courante distribuée + emplacement des .deb téléchargeables
 # ---------------------------------------------------------------------------
 
-CURRENT_VERSION = "0.13.7"
-CURRENT_VERSION_WINDOWS = "1.0.6"
+CURRENT_VERSION = "0.13.8"
+CURRENT_VERSION_WINDOWS = "1.0.7"
 DOWNLOADS_DIR = "/var/www/docpilote/downloads"
 
 # ---------------------------------------------------------------------------

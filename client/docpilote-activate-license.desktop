@@ -1,7 +1,9 @@
 [Desktop Entry]
 Type=Application
 Name=DocPilote — Activer une licence
+Name[en]=DocPilote — Activate a license
 Comment=Activer une licence DocPilote (abonnement mensuel) ou verifier votre quota
+Comment[en]=Activate a DocPilote license (monthly subscription) or check your quota
 Exec=/opt/docpilote/client/docpilote-run.sh activate-license
 Icon=accessories-text-editor
 Terminal=false

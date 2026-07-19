@@ -10,55 +10,66 @@ Icon=accessories-text-editor
 
 [Desktop Action summarize]
 Name=✦ Résumer
+Name[en]=✦ Summarize
 Icon=accessories-text-editor
 Exec=/opt/docpilote/client/docpilote-run.sh summarize %F
 
 [Desktop Action respond]
 Name=✎ Préparer une réponse
+Name[en]=✎ Prepare a reply
 Icon=accessories-text-editor
 Exec=/opt/docpilote/client/docpilote-run.sh respond %F
 
 [Desktop Action explain]
 Name=❓ Explique-moi ce document
+Name[en]=❓ Explain this document
 Icon=accessories-text-editor
 Exec=/opt/docpilote/client/docpilote-run.sh explain %F
 
 [Desktop Action decide]
 Name=✓ Quelles actions dois-je entreprendre ?
+Name[en]=✓ What actions should I take?
 Icon=accessories-text-editor
 Exec=/opt/docpilote/client/docpilote-run.sh decide %F
 
 [Desktop Action risks]
 Name=⚠️ Détecter les risques
+Name[en]=⚠️ Detect risks
 Icon=accessories-text-editor
 Exec=/opt/docpilote/client/docpilote-run.sh risks %F
 
 [Desktop Action checklist]
 Name=☑ Créer une checklist
+Name[en]=☑ Create a checklist
 Icon=accessories-text-editor
 Exec=/opt/docpilote/client/docpilote-run.sh checklist %F
 
 [Desktop Action extract]
 Name={ } Extraire (JSON)
+Name[en]={ } Extract (JSON)
 Icon=accessories-text-editor
 Exec=/opt/docpilote/client/docpilote-run.sh extract %F
 
 [Desktop Action ask]
 Name=? Interroger ce document
+Name[en]=? Ask this document
 Icon=accessories-text-editor
 Exec=/opt/docpilote/client/docpilote-run.sh ask %F
 
 [Desktop Action transform]
 Name=⇄ Transformer...
+Name[en]=⇄ Transform...
 Icon=accessories-text-editor
 Exec=/opt/docpilote/client/docpilote-run.sh transform %F
 
 [Desktop Action compare]
 Name=↔ Comparer ces 2 documents
+Name[en]=↔ Compare these 2 documents
 Icon=accessories-text-editor
 Exec=/opt/docpilote/client/docpilote-run.sh compare %F
 
 [Desktop Action activate-license]
 Name=🔑 Activer une licence
+Name[en]=🔑 Activate a license
 Icon=accessories-text-editor
 Exec=/opt/docpilote/client/docpilote-run.sh activate-license

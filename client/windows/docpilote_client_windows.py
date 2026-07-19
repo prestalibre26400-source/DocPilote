@@ -23,7 +23,7 @@ from tkinter import filedialog, messagebox, ttk
 API_URL = "https://docpilote.prestalibre.org/api"
 PRICING_URL = "https://docpilote.prestalibre.org/#pricing"
 
-CLIENT_VERSION = "1.0.6"
+CLIENT_VERSION = "1.0.7"
 
 APPDATA = os.environ.get("APPDATA", os.path.expanduser("~"))
 LOCALAPPDATA = os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))
